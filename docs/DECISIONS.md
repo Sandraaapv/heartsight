@@ -33,3 +33,25 @@ This document records key decisions, rationales, and deviations made during deve
 ### D-007: SHAP Attribution Background
 - **Decision**: Exported a 50-sample background distribution alongside the linear model for exact interventional SHAP feature attribution in the inference engine.
 - **Rationale**: Guarantees fast, consistent, and interpretable per-factor drivers for the API contract.
+
+## Phase 2: Backend API & Risk Calculations
+
+### D-008: Published Source for ASCVD Pooled Cohort Equations
+- **Decision**: Coefficients and baseline survival constants were extracted directly from the published 2013 ACC/AHA Guideline (Goff DC Jr, Lloyd-Jones DM, Bennett G, et al. *Circulation*. 2014;129(25 suppl 2):S49–S73), specifically Appendix 7, Table A ("Algorithm for Estimation of 10-Year ASCVD Risk").
+- **Rationale**: Adheres to non-negotiable rule 5 of BUILD_PLAN.md never to write coefficients from memory, validated with unit tests against published worked examples (55yo vignette yielding White Female 2.1%, Black Female 3.0%, White Male 5.3%, Black Male 6.1%).
+
+### D-009: Strict Clinical Age Range for PCE
+- **Decision**: Enforced valid age bounds strictly between 40 and 79. Outside this range, the API returns `applicable: false` and `risk: null` with an explanatory clinical caveat.
+- **Rationale**: The Pooled Cohort Equations were derived and validated only for adults aged 40 to 79. Fabricating numerical risk outside this range is clinically deceptive.
+
+### D-010: Ethnicity Group Mapping and South Asian Caution
+- **Decision**: Mapped ethnicity group `"other"` to the White patient equations, with mandatory inclusion of an educational caveat regarding documented risk underestimation in South Asian populations.
+- **Rationale**: Follows ACC/AHA clinical guidance while ensuring transparency about cohort generalization limitations.
+
+### D-011: Counterfactual Feature Normalization
+- **Decision**: Normalized counterfactual drops and CAD SHAP attributions onto a unified scale bounded between -1.0 and +1.0 with explicit source tagging (`"shap"` vs `"counterfactual"`).
+- **Rationale**: Enables harmonious rendering of multi-modal drivers on the frontend while preserving the distinct statistical origin of each signal.
+
+### D-012: Coronary Artery Heuristic Calibration
+- **Decision**: Calibrated starting weights across LAD, LCX, RCA, and LMCA (`overall_blend = 0.5 * cad + 0.5 * min(ten_year / 0.20, 1.0)`, `LMCA = max(LAD, LCX)`).
+- **Rationale**: Successfully separates the three demonstration personas (Elena ~0.01, Marcus ~0.59, Ravi ~0.96) across the three visual risk ramp bands (Low, Elevated, High).
