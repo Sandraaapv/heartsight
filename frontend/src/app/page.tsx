@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { DisclaimerBanner } from "@/components/DisclaimerBanner";
 import { Header } from "@/components/Header";
 import { IntakeForm } from "@/components/IntakeForm";
@@ -19,6 +20,12 @@ import {
   HeartPulse,
   Sparkles,
 } from "lucide-react";
+
+// Dynamically import HeartScene (client-only for WebGL Canvas)
+const HeartScene = dynamic(
+  () => import("@/components/canvas/HeartScene").then((mod) => mod.HeartScene),
+  { ssr: false }
+);
 
 const FALLBACK_PERSONAS: Persona[] = [
   {
@@ -103,6 +110,7 @@ export default function Home() {
   const [currentInput, setCurrentInput] = useState<PatientInput>(FALLBACK_PERSONAS[2].input_data);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>("ravi");
   const [predictionResult, setPredictionResult] = useState<PredictResponse | null>(null);
+  const [selectedArteryId, setSelectedArteryId] = useState<string | null>("lad");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -147,10 +155,9 @@ export default function Home() {
 
     try {
       const response = await predictPatient(formData);
-      console.log("Prediction Result:", response);
       setPredictionResult(response);
 
-      // Scroll to results
+      // Scroll to results anchor
       setTimeout(() => {
         const resultElem = document.getElementById("results-anchor");
         if (resultElem) {
@@ -166,43 +173,73 @@ export default function Home() {
     }
   };
 
+  // Determine active risk score and artery scores for the 3D scene
+  const activeArteryScores = predictionResult?.arteries ?? (
+    selectedPersonaId === "ravi"
+      ? { left_main: 0.87, lad: 0.87, lcx: 0.86, rca: 0.87 }
+      : selectedPersonaId === "marcus"
+      ? { left_main: 0.48, lad: 0.48, lcx: 0.45, rca: 0.42 }
+      : { left_main: 0.15, lad: 0.15, lcx: 0.14, rca: 0.12 }
+  );
+
+  const activeOverallRisk = predictionResult
+    ? predictionResult.cad.probability
+    : selectedPersonaId === "ravi"
+    ? 0.58
+    : selectedPersonaId === "marcus"
+    ? 0.32
+    : 0.08;
+
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg)] text-[var(--text)] transition-colors">
       <DisclaimerBanner />
       <Header />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-12">
-        {/* HERO SECTION */}
-        <section className="text-center max-w-3xl mx-auto space-y-6 pt-4 sm:pt-8">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold bg-[var(--sage-soft)] text-[var(--text)] border border-[var(--border)]">
-            <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
-            <span>Track A: Cardiovascular Risk Visualization &amp; Prediction</span>
+        {/* HERO SECTION WITH 3D BEATING HEART */}
+        <section className="space-y-8 pt-2 sm:pt-4">
+          <div className="text-center max-w-3xl mx-auto space-y-4">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold bg-[var(--sage-soft)] text-[var(--text)] border border-[var(--border)]">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>Track A: Cardiovascular Risk Visualization &amp; Prediction</span>
+            </div>
+
+            <h1 className="text-4xl sm:text-6xl font-extrabold font-display tracking-tight text-[var(--text)] leading-tight">
+              Beat the odds.
+            </h1>
+
+            <p className="text-base sm:text-lg text-[var(--text-muted)] leading-relaxed">
+              Explore your cardiovascular profile through dual clinical prediction models, mapped directly onto an interactive 3D coronary vascular model.
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <a
+                href="#intake-section"
+                id="hero-start-button"
+                className="inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs font-bold bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all shadow-md hover:shadow-lg"
+              >
+                <HeartPulse className="w-4 h-4" />
+                <span>Start Risk Assessment</span>
+                <ArrowDown className="w-3.5 h-3.5 opacity-80" />
+              </a>
+              <a
+                href="#personas-section"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-xs font-bold border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:border-[var(--text-muted)] transition-all"
+              >
+                <span>Explore Personas</span>
+              </a>
+            </div>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl font-extrabold font-display tracking-tight text-[var(--text)] leading-tight">
-            Beat the odds.
-          </h1>
-
-          <p className="text-base sm:text-lg text-[var(--text-muted)] leading-relaxed">
-            Enter clinical and physiological parameters to compute dual cardiovascular predictions:
-            Coronary Artery Disease likelihood and 10-year ASCVD risk, mapped onto illustrative coronary territories.
-          </p>
-
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <a
-              href="#intake-section"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-xs font-bold bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all shadow-sm"
-            >
-              <HeartPulse className="w-4 h-4" />
-              <span>Start Risk Assessment</span>
-              <ArrowDown className="w-3.5 h-3.5 opacity-70" />
-            </a>
-            <a
-              href="#personas-section"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-xs font-bold border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:border-[var(--text-muted)] transition-all"
-            >
-              <span>Explore Example Patients</span>
-            </a>
+          {/* INTERACTIVE 3D CARDIOVASCULAR SCENE */}
+          <div className="w-full">
+            <HeartScene
+              arteryScores={activeArteryScores}
+              overallRisk={activeOverallRisk}
+              selectedArteryId={selectedArteryId}
+              onSelectArtery={(id) => setSelectedArteryId(id || null)}
+              initialViewMode={predictionResult ? "heart" : "heart"}
+            />
           </div>
         </section>
 
@@ -247,7 +284,7 @@ export default function Home() {
             Educational and research prototype. Models trained on Cleveland Heart Disease and ACC/AHA Pooled Cohort Equations.
           </p>
           <p className="text-[11px] opacity-75">
-            No patient records or personal health identifiers are logged or retained.
+            Anatomy: Procedural stylized torso and heart fallback (Three.js) &bull; No patient records or personal health identifiers are retained.
           </p>
         </div>
       </footer>

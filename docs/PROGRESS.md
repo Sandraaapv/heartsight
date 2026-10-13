@@ -8,7 +8,7 @@ Tracking phases against `BUILD_PLAN.md`.
 | **Phase 1** | Machine learning (CAD model & SHAP) | Completed | `python ml/train.py` runs end-to-end; Logistic Regression selected (CV AUROC 0.8698 ± 0.0357, Brier 0.1471); `metrics.json` generated; 200 bootstrap models & SHAP background saved; all 5 pytest tests pass |
 | **Phase 2** | Backend API (PCE, Heart Age, Artery Heuristic) | Completed | 2013 ACC/AHA PCE implemented with published Table A coefficients and verified against worked examples; all 6 endpoints implemented; 17/17 pytest tests passed; curl examples in `backend/README.md` |
 | **Phase 3** | Frontend foundation & intake | Completed | Design tokens for light/dark themes with toggle; sticky disclaimer banner; stepped 4-stage intake form with hints; persona gallery loading all 3 personas; typed API client (`frontend/src/lib/api.ts`); `npm run build` and `npm run lint` passed |
-| **Phase 4** | 3D scene (torso, heart, arteries) | Pending | |
+| **Phase 4** | 3D scene (torso, heart, arteries) | Completed | Procedural stylized torso & beating heart fallback implemented via Three.js / React Three Fiber; CatmullRom tube coronary arteries (LMCA, LAD, LCX, RCA); dynamic theme-aware risk-color mapping; heartbeat animation scaled with patient risk; camera fly-in & orbit controls; hover tooltips & click selection; `npm run build` and `npm run lint` passed cleanly; 18 backend tests pass |
 | **Phase 5** | Results, explanations, and what-if | Pending | |
 | **Phase 6** | Early deployment config | Pending | |
 | **Phase 7** | Wow features (tier 1) | Pending | |

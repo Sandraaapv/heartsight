@@ -64,17 +64,53 @@ def test_predict_endpoint_success(sample_patient_dict):
 
 
 def test_predict_young_patient_not_applicable_ten_year(sample_patient_dict):
-    """Verify that age < 40 yields applicable=False and risk=None."""
+    """Verify that age < 40 (e.g. age 35) yields HTTP 200, valid CAD prediction, applicable=False and risk=None (not 422)."""
     young_patient = dict(sample_patient_dict)
-    young_patient["age"] = 28
+    young_patient["age"] = 35
 
     response = client.post("/predict", json=young_patient)
     assert response.status_code == 200
     data = response.json()
 
+    assert 0.0 <= data["cad"]["probability"] <= 1.0
     assert data["ten_year"]["applicable"] is False
     assert data["ten_year"]["risk"] is None
     assert "40 to 79 only" in data["ten_year"]["note"]
+
+
+def test_ravi_whatif_lifestyle_and_statin_response():
+    """Verify Ravi's whatif simulation: smoking cessation + SBP 130 + statin lowers CAD, ASCVD, heart age, and artery scores."""
+    from app.personas import get_personas
+    ravi = next(p for p in get_personas() if p.id == "ravi").input_data.model_dump()
+
+    whatif_body = {
+        "baseline": ravi,
+        "changes": {
+            "smoker": False,
+            "systolic_bp": 130.0,
+            "statin": True,
+        },
+    }
+    response = client.post("/whatif", json=whatif_body)
+    assert response.status_code == 200
+    data = response.json()
+
+    base = data["baseline"]
+    scen = data["scenario"]
+
+    # Baseline matches expected calibrated high-risk profile (20-30% 10-year risk band)
+    assert 0.20 <= base["ten_year"]["risk"] <= 0.30
+    assert base["cad"]["probability"] > 0.50
+    assert base["heart_age"]["bound"] == "at_least"
+    assert base["arteries"]["lad"] > 0.80
+
+    # Scenario intervention lowers all risk metrics significantly
+    assert scen["cad"]["probability"] < base["cad"]["probability"]
+    assert scen["ten_year"]["risk"] < base["ten_year"]["risk"]
+    assert scen["heart_age"]["value"] < base["heart_age"]["value"]
+    assert scen["arteries"]["lad"] < base["arteries"]["lad"]
+    assert scen["arteries"]["left_main"] < base["arteries"]["left_main"]
+
 
 
 def test_validation_errors_422():

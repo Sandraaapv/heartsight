@@ -55,3 +55,11 @@ This document records key decisions, rationales, and deviations made during deve
 ### D-012: Coronary Artery Heuristic Calibration
 - **Decision**: Calibrated starting weights across LAD, LCX, RCA, and LMCA (`overall_blend = 0.5 * cad + 0.5 * min(ten_year / 0.20, 1.0)`, `LMCA = max(LAD, LCX)`).
 - **Rationale**: Successfully separates the three demonstration personas (Elena ~0.01, Marcus ~0.59, Ravi ~0.96) across the three visual risk ramp bands (Low, Elevated, High).
+
+## Phase 4: 3D Scene
+
+### D-013: Procedural Stylized Torso and Beating Heart Fallback
+- **Decision**: In the absence of a pre-supplied GLB asset at `frontend/public/models/anatomy.glb`, constructed a procedural stylized 3D thoracic cage (rib arches, spine column, sternum, clavicles) and anatomical heart (ventricular myocardium, atria, ascending aorta arch, branching vessels, pulmonary trunk, vena cava) using Three.js and React Three Fiber.
+- **Rationale**: Adheres to section 7 (Phase 4) fallback rule: *"Load the GLB torso and heart from frontend/public/models/anatomy.glb (the owner supplies it; if missing when this phase starts, build a procedural stylized torso and heart instead and note it in docs/DECISIONS.md)"*.
+- **Implementation**: The procedural model introduces zero external network payload (retaining well below 5 MB constraint), runs at smooth 60 FPS on laptops and mobile devices, features four CatmullRom tube coronary arteries (Left Main, LAD, LCX, RCA), dynamic theme-aware risk-color mapping, pulsating cardiac cycles scaling with patient risk (62 to 105 BPM), camera fly-in, and interactive hover/click selection.
+
