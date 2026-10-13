@@ -1,26 +1,81 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Light Theme: Calm Sage */
+  --bg: #EEF2EC;
+  --bg-tint: #E3EAE0;
+  --surface: #FBFCFA;
+  --surface-raised: #FFFFFF;
+  --sage-soft: #D5DFD1;
+  --primary: #566F52;
+  --primary-hover: #455A42;
+  --text: #2F3E31;
+  --text-muted: #5E6B5F;
+  --border: #DDE5DA;
+  --stage: #10302C;
+  --accent: #566F52;
+  --accent-2: #7C5CFF;
+
+  /* Risk Ramp: Light Theme */
+  --risk-low: #1F9D8F;
+  --risk-elevated: #E0A030;
+  --risk-high: #D14B4B;
+
+  --font-serif-display: var(--font-fraunces, Georgia, serif);
+  --font-sans-body: var(--font-inter, system-ui, -apple-system, sans-serif);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+.dark,
+[data-theme="dark"] {
+  /* Dark Theme: Near-Black with Glowing Accents */
+  --bg: #06080A;
+  --bg-tint: #0B0E12;
+  --surface: #0D1115;
+  --surface-raised: #131A1F;
+  --sage-soft: #182229;
+  --primary: #22D3C5;
+  --primary-hover: #1AB8AB;
+  --text: #E8EEF1;
+  --text-muted: #8A98A3;
+  --border: #1C262D;
+  --stage: #05070A;
+  --accent: #22D3C5;
+  --accent-2: #7C5CFF;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Risk Ramp: Dark Theme */
+  --risk-low: #2DD4BF;
+  --risk-elevated: #F5B84B;
+  --risk-high: #FF4D5E;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans-body);
+  transition: background-color 0.25s ease, color 0.25s ease;
+  min-height: 100vh;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-serif-display);
+}
+
+/* Glassmorphism & Token Helper Utilities */
+.glass-panel {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dark .glass-panel {
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.4);
+}
+
+.glow-accent {
+  box-shadow: 0 0 25px -4px rgba(34, 211, 197, 0.3);
+}
+
+/* Custom range input styling using design tokens */
+input[type="range"] {
+  accent-color: var(--accent);
 }
