@@ -1,0 +1,103 @@
+{
+  "model_name": "Logistic Regression (StandardScaler + L2 Regularization)",
+  "features_used": [
+    "age",
+    "sex",
+    "cp",
+    "trestbps",
+    "chol",
+    "fbs",
+    "restecg",
+    "thalach",
+    "exang",
+    "oldpeak",
+    "slope"
+  ],
+  "features_dropped": [
+    "ca",
+    "thal"
+  ],
+  "drop_rationale": "Features `ca` (number of vessels colored by fluoroscopy) and `thal` (thallium scintigraphy defect) were excluded because they require hospital-based invasive/specialized diagnostic imaging, cannot be self-reported by a patient, and leak post-diagnostic cardiac catheterization work-up.",
+  "dataset_summary": {
+    "name": "UCI Heart Disease (Cleveland)",
+    "total_rows": 303,
+    "cad_positive_rows": 139,
+    "cad_negative_rows": 164,
+    "prevalence": 0.45874587458745875
+  },
+  "cross_validation": {
+    "scheme": "Repeated Stratified 5-Fold Cross-Validation (5 repeats, 25 total folds)",
+    "candidate_comparison": {
+      "logistic_regression": {
+        "auroc_mean": 0.8697675164341832,
+        "auroc_std": 0.03570718178349247,
+        "brier_mean": 0.1470531441183102,
+        "brier_std": 0.021776766709009288
+      },
+      "gradient_boosting": {
+        "auroc_mean": 0.8520947069905404,
+        "auroc_std": 0.03731759520247007,
+        "brier_mean": 0.16017186499604585,
+        "brier_std": 0.021548793434580597
+      }
+    },
+    "selected_model": "logistic_regression",
+    "selection_rationale": "Logistic Regression demonstrated superior cross-validated discrimination (AUROC 0.8698 vs 0.8521) and superior calibration (Brier 0.1471 vs 0.1602), while offering exact linear SHAP interpretability and robustness against small-sample overfitting.",
+    "auroc_mean": 0.8697675164341832,
+    "auroc_std": 0.03570718178349247,
+    "brier_mean": 0.1470531441183102,
+    "brier_std": 0.021776766709009288
+  },
+  "calibration": {
+    "n_bins": 5,
+    "mean_predicted_probabilities": [
+      0.0903615028292135,
+      0.2917311755510785,
+      0.5082035384791904,
+      0.6926818181522282,
+      0.9269433205107142
+    ],
+    "fraction_of_positives": [
+      0.09090909090909091,
+      0.35294117647058826,
+      0.48936170212765956,
+      0.6875,
+      0.9054054054054054
+    ]
+  },
+  "fairness_subgroups": {
+    "by_sex": {
+      "male": {
+        "n": 206,
+        "prevalence": 0.5533980582524272,
+        "auroc": 0.8422959572845157,
+        "caveat": "Predominant group in Cleveland cohort (68%)."
+      },
+      "female": {
+        "n": 97,
+        "prevalence": 0.25773195876288657,
+        "auroc": 0.8772222222222222,
+        "caveat": "Smaller sample size (97 patients, 32%); wider confidence interval."
+      }
+    },
+    "by_age": {
+      "under_55": {
+        "n": 143,
+        "prevalence": 0.3076923076923077,
+        "auroc": 0.8808539944903582,
+        "caveat": "Lower baseline prevalence of symptomatic disease."
+      },
+      "55_and_over": {
+        "n": 160,
+        "prevalence": 0.59375,
+        "auroc": 0.843238866396761,
+        "caveat": "Higher prevalence cohort; age remains a prominent risk factor."
+      }
+    }
+  },
+  "uncertainty_quantification": {
+    "method": "Non-parametric Bootstrap",
+    "n_bootstraps": 200,
+    "interval": "80% confidence interval (10th to 90th percentile)"
+  }
+}
