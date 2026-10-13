@@ -63,3 +63,8 @@ This document records key decisions, rationales, and deviations made during deve
 - **Rationale**: Adheres to section 7 (Phase 4) fallback rule: *"Load the GLB torso and heart from frontend/public/models/anatomy.glb (the owner supplies it; if missing when this phase starts, build a procedural stylized torso and heart instead and note it in docs/DECISIONS.md)"*.
 - **Implementation**: The procedural model introduces zero external network payload (retaining well below 5 MB constraint), runs at smooth 60 FPS on laptops and mobile devices, features four CatmullRom tube coronary arteries (Left Main, LAD, LCX, RCA), dynamic theme-aware risk-color mapping, pulsating cardiac cycles scaling with patient risk (62 to 105 BPM), camera fly-in, and interactive hover/click selection.
 
+### D-014: Scene-First Full-Bleed Workstation UI
+- **Decision**: Replaced generic marketing card layout with a scene-first clinical workstation: the 3D heart fills the entire viewport, with slim translucent HUD overlays (left results, bottom artery strip, top navigation) and a slide-out drawer (`ClinicalDrawer.tsx`) for parameter entry. Retired `PredictionResultCard`.
+- **Rationale**: Elevates UI to medical workstation fidelity; uses strict 8px spacing, large Fraunces numerals for key risks, zero marketing fluff, and makes every onscreen element either a live clinical data readout or an active control.
+
+

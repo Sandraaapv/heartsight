@@ -22,8 +22,11 @@ interface HeartSceneProps {
   selectedArteryId?: string | null;
   onSelectArtery?: (arteryId: string) => void;
   className?: string;
+  viewMode?: "torso" | "heart";
+  onViewModeChange?: (mode: "torso" | "heart") => void;
   initialViewMode?: "torso" | "heart";
   showCalloutCards?: boolean;
+  hideInternalHUD?: boolean;
 }
 
 function subscribeTheme(callback: () => void) {
@@ -50,11 +53,20 @@ export function HeartScene({
   selectedArteryId,
   onSelectArtery,
   className = "",
+  viewMode: controlledViewMode,
+  onViewModeChange,
   initialViewMode = "heart",
   showCalloutCards = true,
+  hideInternalHUD = false,
 }: HeartSceneProps) {
   const isDark = useSyncExternalStore(subscribeTheme, getThemeSnapshot, () => false);
-  const [viewMode, setViewMode] = useState<"torso" | "heart">(initialViewMode);
+  const [internalViewMode, setInternalViewMode] = useState<"torso" | "heart">(initialViewMode);
+  const viewMode = controlledViewMode ?? internalViewMode;
+
+  const setViewMode = (mode: "torso" | "heart") => {
+    setInternalViewMode(mode);
+    onViewModeChange?.(mode);
+  };
   const [autoRotate, setAutoRotate] = useState(false);
   const [hoveredArtery, setHoveredArtery] = useState<{
     def: ArteryDefinition;
@@ -89,7 +101,7 @@ export function HeartScene({
 
   return (
     <div
-      className={`relative w-full h-[520px] sm:h-[620px] rounded-2xl overflow-hidden shadow-2xl border border-[var(--border)] select-none ${className}`}
+      className={`relative w-full h-full overflow-hidden select-none ${className}`}
       style={{ backgroundColor: stageBgColor }}
     >
       {/* 3D WEBGL CANVAS */}
@@ -129,8 +141,10 @@ export function HeartScene({
         <CameraController viewMode={viewMode} autoRotate={autoRotate} />
       </Canvas>
 
-      {/* TOP CONTROLS HUD */}
-      <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
+      {!hideInternalHUD && (
+        <>
+          {/* TOP CONTROLS HUD */}
+          <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
         {/* View Mode Toggle Pill */}
         <div className="inline-flex p-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 pointer-events-auto">
           <button
@@ -306,6 +320,8 @@ export function HeartScene({
         </div>
         <span>Drag to orbit &bull; Scroll to zoom</span>
       </div>
+        </>
+      )}
     </div>
   );
 }

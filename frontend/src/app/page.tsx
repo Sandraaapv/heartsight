@@ -1,12 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
-import { DisclaimerBanner } from "@/components/DisclaimerBanner";
-import { Header } from "@/components/Header";
-import { IntakeForm } from "@/components/IntakeForm";
-import { PersonaGallery } from "@/components/PersonaGallery";
-import { PredictionResultCard } from "@/components/PredictionResultCard";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { ClinicalDrawer } from "@/components/ClinicalDrawer";
 import {
   PatientInput,
   Persona,
@@ -15,13 +12,17 @@ import {
   predictPatient,
 } from "@/lib/api";
 import {
+  Activity,
   AlertTriangle,
-  ArrowDown,
-  HeartPulse,
-  Sparkles,
+  Compass,
+  SlidersHorizontal,
+  TrendingDown,
+  TrendingUp,
+  X,
 } from "lucide-react";
+import { ARTERY_DEFINITIONS, getRiskColor } from "@/components/canvas/arteryData";
 
-// Dynamically import HeartScene (client-only for WebGL Canvas)
+// Dynamically import HeartScene (client-only WebGL Canvas)
 const HeartScene = dynamic(
   () => import("@/components/canvas/HeartScene").then((mod) => mod.HeartScene),
   { ssr: false }
@@ -107,16 +108,21 @@ const FALLBACK_PERSONAS: Persona[] = [
 
 export default function Home() {
   const [personas, setPersonas] = useState<Persona[]>(FALLBACK_PERSONAS);
-  const [currentInput, setCurrentInput] = useState<PatientInput>(FALLBACK_PERSONAS[2].input_data);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>("ravi");
+  const [currentInput, setCurrentInput] = useState<PatientInput>(FALLBACK_PERSONAS[2].input_data);
   const [predictionResult, setPredictionResult] = useState<PredictResponse | null>(null);
   const [selectedArteryId, setSelectedArteryId] = useState<string | null>("lad");
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<"torso" | "heart">("heart");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
-  // Fetch personas on mount from API
+  // Load personas and compute initial prediction for default persona (Ravi)
   useEffect(() => {
     let isMounted = true;
+
+    // Fetch personas from backend if available
     getPersonas()
       .then((data) => {
         if (isMounted && data.length > 0) {
@@ -124,170 +130,472 @@ export default function Home() {
         }
       })
       .catch((err) => {
-        console.warn("Could not fetch remote personas, using static definitions:", err);
+        console.warn("Using bundled persona definitions:", err);
       });
+
+    // Run baseline prediction for default persona
+    predictPatient(FALLBACK_PERSONAS[2].input_data)
+      .then((res) => {
+        if (isMounted) {
+          setPredictionResult(res);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch remote prediction, falling back to local calculation:", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+
     return () => {
       isMounted = false;
     };
   }, []);
 
-  const handleSelectPersona = (data: PatientInput) => {
-    setCurrentInput(data);
-    const matched = personas.find(
-      (p) =>
-        p.input_data.age === data.age &&
-        p.input_data.sex === data.sex &&
-        p.input_data.systolic_bp === data.systolic_bp
-    );
-    if (matched) {
-      setSelectedPersonaId(matched.id);
-    }
-    // Scroll smoothly to intake form
-    const elem = document.getElementById("intake-section");
-    if (elem) {
-      elem.scrollIntoView({ behavior: "smooth" });
-    }
-  };
-
-  const handleSubmit = async (formData: PatientInput) => {
+  // Handle switching personas
+  const handleSelectPersona = async (p: Persona) => {
+    setSelectedPersonaId(p.id);
+    setCurrentInput(p.input_data);
     setIsLoading(true);
     setErrorMessage(null);
 
     try {
-      const response = await predictPatient(formData);
-      setPredictionResult(response);
-
-      // Scroll to results anchor
-      setTimeout(() => {
-        const resultElem = document.getElementById("results-anchor");
-        if (resultElem) {
-          resultElem.scrollIntoView({ behavior: "smooth" });
-        }
-      }, 100);
+      const response = await predictPatient(p.input_data);
+      startTransition(() => {
+        setPredictionResult(response);
+      });
     } catch (err: unknown) {
-      console.error("Prediction failed:", err);
-      const msg = err instanceof Error ? err.message : "Failed to connect to the prediction service.";
+      const msg = err instanceof Error ? err.message : "Failed to calculate prediction.";
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Determine active risk score and artery scores for the 3D scene
+  // Handle recalculation from ClinicalDrawer
+  const handleRecalculate = async (newData: PatientInput) => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    setCurrentInput(newData);
+
+    try {
+      const response = await predictPatient(newData);
+      startTransition(() => {
+        setPredictionResult(response);
+      });
+      setIsDrawerOpen(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to calculate prediction.";
+      setErrorMessage(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Active risk numbers and artery scores
   const activeArteryScores = predictionResult?.arteries ?? (
     selectedPersonaId === "ravi"
-      ? { left_main: 0.87, lad: 0.87, lcx: 0.86, rca: 0.87 }
+      ? { left_main: 0.8732, lad: 0.8732, lcx: 0.8679, rca: 0.8712 }
       : selectedPersonaId === "marcus"
-      ? { left_main: 0.48, lad: 0.48, lcx: 0.45, rca: 0.42 }
-      : { left_main: 0.15, lad: 0.15, lcx: 0.14, rca: 0.12 }
+      ? { left_main: 0.482, lad: 0.482, lcx: 0.451, rca: 0.428 }
+      : { left_main: 0.145, lad: 0.145, lcx: 0.138, rca: 0.122 }
   );
 
   const activeOverallRisk = predictionResult
     ? predictionResult.cad.probability
     : selectedPersonaId === "ravi"
-    ? 0.58
+    ? 0.5819
     : selectedPersonaId === "marcus"
     ? 0.32
     : 0.08;
 
+  const bpm = Math.round(62 + Math.max(0, Math.min(1, activeOverallRisk)) * 43);
+
+  const getScoreForBranch = (scores: typeof activeArteryScores, id: string): number => {
+    switch (id) {
+      case "left_main":
+        return scores.left_main;
+      case "lad":
+        return scores.lad;
+      case "lcx":
+        return scores.lcx;
+      case "rca":
+        return scores.rca;
+      default:
+        return 0.25;
+    }
+  };
+
+  // Selected artery definition
+  const selectedDef = ARTERY_DEFINITIONS.find((d) => d.id === selectedArteryId);
+  const selectedScore = selectedDef
+    ? getScoreForBranch(activeArteryScores, selectedDef.id)
+    : null;
+
+  // Check if dark mode is active for token colors
+  const isDark = typeof document !== "undefined" &&
+    (document.documentElement.classList.contains("dark") ||
+      document.documentElement.getAttribute("data-theme") === "dark");
+
+  const getRampColor = (val: number) => getRiskColor(val, isDark).hex;
+
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg)] text-[var(--text)] transition-colors">
-      <DisclaimerBanner />
-      <Header />
+    <div className="relative w-screen h-screen overflow-hidden bg-[var(--stage)] text-[var(--text)] select-none font-sans">
+      {/* FULL-BLEED 3D SCENE BACKGROUND */}
+      <div className="absolute inset-0 w-full h-full z-0">
+        <HeartScene
+          arteryScores={activeArteryScores}
+          overallRisk={activeOverallRisk}
+          selectedArteryId={selectedArteryId}
+          onSelectArtery={(id) => setSelectedArteryId(id || null)}
+          viewMode={viewMode}
+          onViewModeChange={(mode) => setViewMode(mode)}
+          hideInternalHUD={true}
+        />
+      </div>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-12">
-        {/* HERO SECTION WITH 3D BEATING HEART */}
-        <section className="space-y-8 pt-2 sm:pt-4">
-          <div className="text-center max-w-3xl mx-auto space-y-4">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold bg-[var(--sage-soft)] text-[var(--text)] border border-[var(--border)]">
-              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>Track A: Cardiovascular Risk Visualization &amp; Prediction</span>
-            </div>
+      {/* TOP BAR (SLIM FROSTED GLASS HUD, 48px, STRICT 8px SCALE) */}
+      <header className="absolute top-0 left-0 right-0 z-20 h-12 px-4 flex items-center justify-between bg-black/40 backdrop-blur-md border-b border-white/10 text-white">
+        {/* Brand & Track */}
+        <div className="flex items-center gap-3">
+          <span className="font-display text-base font-bold tracking-tight text-white">
+            HeartSight
+          </span>
+          <span className="hidden sm:inline-block text-[11px] font-mono text-white/50 border-l border-white/15 pl-3">
+            Cardiovascular Risk &amp; 3D Coronary Mapping
+          </span>
+        </div>
 
-            <h1 className="text-4xl sm:text-6xl font-extrabold font-display tracking-tight text-[var(--text)] leading-tight">
-              Beat the odds.
-            </h1>
+        {/* Persona Quick Selector */}
+        <div className="flex items-center gap-1.5 p-1 rounded-lg bg-black/30 border border-white/10 text-xs font-medium">
+          {personas.map((p) => {
+            const isSelected = selectedPersonaId === p.id;
+            const levelLabel =
+              p.risk_level === "low"
+                ? "Low"
+                : p.risk_level === "medium"
+                ? "Med"
+                : "High";
 
-            <p className="text-base sm:text-lg text-[var(--text-muted)] leading-relaxed">
-              Explore your cardiovascular profile through dual clinical prediction models, mapped directly onto an interactive 3D coronary vascular model.
-            </p>
-
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-              <a
-                href="#intake-section"
-                id="hero-start-button"
-                className="inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs font-bold bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-all shadow-md hover:shadow-lg"
+            return (
+              <button
+                key={p.id}
+                onClick={() => handleSelectPersona(p)}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  isSelected
+                    ? "bg-[var(--accent)] text-black font-bold shadow-sm"
+                    : "text-white/70 hover:text-white hover:bg-white/5"
+                }`}
               >
-                <HeartPulse className="w-4 h-4" />
-                <span>Start Risk Assessment</span>
-                <ArrowDown className="w-3.5 h-3.5 opacity-80" />
-              </a>
-              <a
-                href="#personas-section"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-xs font-bold border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:border-[var(--text-muted)] transition-all"
-              >
-                <span>Explore Personas</span>
-              </a>
-            </div>
+                <span>{p.name}</span>
+                <span className="text-[10px] opacity-75 font-mono">
+                  {p.input_data.age}y &bull; {levelLabel}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* View and Parameters Controls */}
+        <div className="flex items-center gap-2">
+          {/* Camera View Toggle */}
+          <div className="hidden md:flex items-center p-0.5 rounded-lg bg-black/30 border border-white/10 text-xs">
+            <button
+              onClick={() => setViewMode("heart")}
+              className={`px-2 py-1 rounded text-xs transition-all ${
+                viewMode === "heart"
+                  ? "bg-white/15 text-white font-bold"
+                  : "text-white/60 hover:text-white"
+              }`}
+            >
+              Heart
+            </button>
+            <button
+              onClick={() => setViewMode("torso")}
+              className={`px-2 py-1 rounded text-xs transition-all ${
+                viewMode === "torso"
+                  ? "bg-white/15 text-white font-bold"
+                  : "text-white/60 hover:text-white"
+              }`}
+            >
+              Torso
+            </button>
           </div>
 
-          {/* INTERACTIVE 3D CARDIOVASCULAR SCENE */}
-          <div className="w-full">
-            <HeartScene
-              arteryScores={activeArteryScores}
-              overallRisk={activeOverallRisk}
-              selectedArteryId={selectedArteryId}
-              onSelectArtery={(id) => setSelectedArteryId(id || null)}
-              initialViewMode={predictionResult ? "heart" : "heart"}
-            />
-          </div>
-        </section>
+          {/* Edit Parameters Drawer Button */}
+          <button
+            onClick={() => setIsDrawerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] text-xs font-bold transition-all shadow-sm"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Parameters</span>
+            <span className="font-mono text-[11px] opacity-80">
+              ({currentInput.age}y &bull; {currentInput.systolic_bp} mmHg)
+            </span>
+          </button>
 
-        {/* PERSONA GALLERY */}
-        <PersonaGallery
-          personas={personas}
-          onSelectPersona={handleSelectPersona}
-          selectedPersonaId={selectedPersonaId}
-        />
+          {/* Theme Toggle */}
+          <ThemeToggle />
+        </div>
+      </header>
 
-        {/* STEPPED INTAKE FORM */}
-        <IntakeForm
-          key={selectedPersonaId}
-          initialValues={currentInput}
-          onSubmit={handleSubmit}
-          isLoading={isLoading}
-        />
-
-        {/* ERROR STATE */}
-        {errorMessage && (
-          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs flex items-center gap-2.5">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
+      {/* ERROR NOTICE (IF ANY) */}
+      {errorMessage && (
+        <div className="absolute top-14 left-4 right-4 z-30 p-2.5 rounded-lg bg-red-950/80 border border-red-500/50 text-red-200 text-xs flex items-center justify-between backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
             <span>{errorMessage}</span>
           </div>
+          <button onClick={() => setErrorMessage(null)} className="p-1 hover:text-white">
+            &times;
+          </button>
+        </div>
+      )}
+
+      {/* PRIMARY CLINICAL RESULTS HUD (SLIM OVERLAY, LEFT SIDE) */}
+      <div className="absolute top-16 left-4 z-10 w-72 sm:w-80 p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white space-y-4 shadow-2xl">
+        {/* CAD PRESENCE LIKELIHOOD */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-white/60">
+            <span>CAD Likelihood</span>
+            <span className="font-mono text-[10px] text-white/40">UCI Cleveland ML</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span
+              className="font-display text-4xl sm:text-5xl font-extrabold tracking-tight"
+              style={{ color: getRampColor(activeOverallRisk) }}
+            >
+              {(activeOverallRisk * 100).toFixed(1)}%
+            </span>
+            {predictionResult && (
+              <span className="font-mono text-[11px] text-white/50">
+                80% CI: [{(predictionResult.cad.interval_80[0] * 100).toFixed(0)}%–
+                {(predictionResult.cad.interval_80[1] * 100).toFixed(0)}%]
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* 10-YEAR HARD ASCVD RISK */}
+        <div className="space-y-1 pt-2 border-t border-white/10">
+          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-white/60">
+            <span>10-Year ASCVD Risk</span>
+            <span className="font-mono text-[10px] text-white/40">ACC/AHA 2013 PCE</span>
+          </div>
+          <div>
+            {predictionResult?.ten_year.applicable === false ? (
+              <div className="text-sm font-semibold text-amber-300">
+                Not Applicable (&lt;40 years)
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-2">
+                <span
+                  className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight"
+                  style={{
+                    color: getRampColor(predictionResult?.ten_year.risk ?? 0.25),
+                  }}
+                >
+                  {predictionResult?.ten_year.risk !== null && predictionResult?.ten_year.risk !== undefined
+                    ? `${(predictionResult.ten_year.risk * 100).toFixed(1)}%`
+                    : `${(selectedPersonaId === "ravi" ? 29.7 : selectedPersonaId === "marcus" ? 9.2 : 0.8).toFixed(1)}%`}
+                </span>
+                <span className="text-[11px] text-white/50">Hard ASCVD Event</span>
+              </div>
+            )}
+            {/* South Asian / Demographic Caveat */}
+            {currentInput.ethnicity_group === "other" && (
+              <p className="text-[10px] text-amber-300/80 leading-tight pt-1">
+                PCE underestimates risk in South Asian populations.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* HEART AGE ESTIMATION */}
+        <div className="space-y-1 pt-2 border-t border-white/10">
+          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-white/60">
+            <span>Vascular Heart Age</span>
+            <span className="font-mono text-[10px] text-white/40">
+              Chronological: {currentInput.age}y
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+              {predictionResult?.heart_age.bound === "at_least"
+                ? `\u2265 ${Math.round(predictionResult.heart_age.value ?? 79)}`
+                : predictionResult?.heart_age.value
+                ? Math.round(predictionResult.heart_age.value)
+                : selectedPersonaId === "ravi"
+                ? "\u2265 79"
+                : selectedPersonaId === "marcus"
+                ? "65"
+                : "42"}{" "}
+              <span className="text-sm font-normal text-white/60">years</span>
+            </span>
+            <span className="text-[11px] text-white/50">
+              {selectedPersonaId === "ravi" ? "(+27 yr gap)" : ""}
+            </span>
+          </div>
+        </div>
+
+        {/* TOP RISK DRIVERS (COMPACT DATA-ONLY LIST) */}
+        {predictionResult?.drivers && predictionResult.drivers.length > 0 && (
+          <div className="space-y-1.5 pt-2 border-t border-white/10">
+            <span className="block text-[10px] font-semibold uppercase tracking-wider text-white/50">
+              Primary Attributed Drivers
+            </span>
+            <div className="space-y-1">
+              {predictionResult.drivers.slice(0, 3).map((d) => {
+                const isHarmful = d.direction === "harmful";
+                return (
+                  <div
+                    key={d.factor}
+                    className="flex items-center justify-between text-xs py-0.5"
+                  >
+                    <span className="text-white/80 truncate max-w-[170px]">{d.label}</span>
+                    <div className="flex items-center gap-1 font-mono text-[11px] font-bold">
+                      {isHarmful ? (
+                        <TrendingUp className="w-3 h-3 text-[var(--risk-high)]" />
+                      ) : (
+                        <TrendingDown className="w-3 h-3 text-[var(--risk-low)]" />
+                      )}
+                      <span style={{ color: isHarmful ? "var(--risk-high)" : "var(--risk-low)" }}>
+                        {isHarmful ? "+" : ""}
+                        {Math.round(d.contribution * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
+      </div>
 
-        {/* COMPUTED RESULT DISPLAY */}
-        <div id="results-anchor">
-          {predictionResult && (
-            <PredictionResultCard prediction={predictionResult} />
-          )}
-        </div>
-      </main>
+      {/* SELECTED ARTERY TERRITORY INSPECTOR (TOP-RIGHT SLIM PANEL) */}
+      {selectedDef && selectedScore !== null && (
+        <div className="absolute top-16 right-4 z-10 w-72 sm:w-80 p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white space-y-3 shadow-2xl animate-in fade-in duration-150">
+          <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-2">
+            <div>
+              <span className="text-[10px] font-mono uppercase font-semibold text-[var(--accent)] tracking-wider">
+                Vascular Territory
+              </span>
+              <h4 className="font-display text-sm font-bold text-white leading-snug">
+                {selectedDef.name}
+              </h4>
+              <span className="text-[10px] font-mono text-white/50 italic">
+                {selectedDef.clinicalName}
+              </span>
+            </div>
+            <button
+              onClick={() => setSelectedArteryId(null)}
+              className="text-white/40 hover:text-white p-1"
+              aria-label="Close inspector"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-      {/* FOOTER */}
-      <footer className="border-t border-[var(--border)] bg-[var(--surface)] py-8 px-4 text-center text-xs text-[var(--text-muted)] mt-12 transition-colors">
-        <div className="max-w-7xl mx-auto space-y-2">
-          <p className="font-display text-sm font-bold text-[var(--text)]">
-            HeartSight &mdash; Multimodal AI Hackathon 2026
+          <div className="flex items-center justify-between py-1 bg-white/5 px-2.5 rounded-lg border border-white/5 text-xs">
+            <span className="text-white/70">Territory Score:</span>
+            <div className="flex items-baseline gap-1.5 font-mono">
+              <span className="text-base font-extrabold text-white">
+                {(selectedScore * 100).toFixed(1)}%
+              </span>
+              <span
+                className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded"
+                style={{
+                  color: getRampColor(selectedScore),
+                  backgroundColor: `${getRampColor(selectedScore)}22`,
+                }}
+              >
+                {getRiskColor(selectedScore, isDark).level}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-white/70 leading-relaxed">
+            {selectedDef.description}
           </p>
-          <p>
-            Educational and research prototype. Models trained on Cleveland Heart Disease and ACC/AHA Pooled Cohort Equations.
-          </p>
-          <p className="text-[11px] opacity-75">
-            Anatomy: Procedural stylized torso and heart fallback (Three.js) &bull; No patient records or personal health identifiers are retained.
+
+          <p className="text-[10px] text-white/50 italic border-t border-white/10 pt-2 leading-tight">
+            Perfusion: {selectedDef.territory}
           </p>
         </div>
+      )}
+
+      {/* BOTTOM ARTERY STRIP (SLIM HUD OVERLAY, STRICT 8px SCALE) */}
+      <div className="absolute bottom-8 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+        {/* Coronary branches selector strip */}
+        <div className="flex items-center gap-2 pointer-events-auto p-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/10">
+          {ARTERY_DEFINITIONS.map((art) => {
+            const score = getScoreForBranch(activeArteryScores, art.id);
+            const color = getRampColor(score);
+            const isSelected = selectedArteryId === art.id;
+
+            return (
+              <button
+                key={art.id}
+                onClick={() => setSelectedArteryId(art.id)}
+                className={`px-3 py-2 rounded-lg text-left transition-all flex items-center gap-2.5 border ${
+                  isSelected
+                    ? "bg-white/15 border-[var(--accent)] ring-1 ring-[var(--accent)]/50 shadow-md"
+                    : "bg-transparent border-transparent hover:bg-white/5"
+                }`}
+              >
+                <div
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: color }}
+                />
+                <div className="space-y-0.5">
+                  <div className="text-[11px] font-bold text-white tracking-tight">
+                    {art.shortName}
+                  </div>
+                  <div className="font-mono text-[10px] font-semibold text-white/70">
+                    {Math.round(score * 100)}%
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Telemetry & 3D Navigation hints */}
+        <div className="flex items-center gap-3 pointer-events-auto">
+          {/* Cardiac Rhythm BPM */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-xs text-white">
+            <Activity className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+            <span className="font-mono font-bold">{bpm} BPM</span>
+            <span className="text-[10px] text-white/50 border-l border-white/10 pl-2">
+              Scaled to Risk
+            </span>
+          </div>
+
+          {/* Navigation guide */}
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-[10px] text-white/50 font-mono">
+            <Compass className="w-3 h-3 text-[var(--accent)]" />
+            <span>Orbit &bull; Zoom &bull; Click Vessels</span>
+          </div>
+        </div>
+      </div>
+
+      {/* BOTTOM DISCLAIMER (SINGLE SLIM LINE) */}
+      <footer className="absolute bottom-1 left-4 right-4 z-10 flex items-center justify-between text-[10px] text-white/40 pointer-events-none">
+        <span>
+          Educational simulation &bull; Not a medical diagnostic device &bull; Cleveland Heart Disease &amp; ACC/AHA PCE
+        </span>
+        <span>Three.js procedural anatomy fallback</span>
       </footer>
+
+      {/* CLINICAL INTAKE SLIDE-OUT DRAWER */}
+      <ClinicalDrawer
+        key={`${selectedPersonaId}-${currentInput.age}-${currentInput.systolic_bp}`}
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        input={currentInput}
+        onRecalculate={handleRecalculate}
+        isLoading={isLoading}
+      />
     </div>
   );
 }
